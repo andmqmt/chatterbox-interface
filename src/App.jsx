@@ -26,6 +26,13 @@ function App() {
   const iniciarConversa = async (teoria = null) => {
     try {
       setCarregando(true);
+      
+      if (wsRef.current) {
+        console.log('[FRONTEND] Fechando WebSocket anterior...');
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      
       const conversa = await ConversaService.criarConversa(teoria);
       console.log('Conversa criada:', conversa);
       setConversaId(conversa.id);
@@ -34,6 +41,7 @@ function App() {
       console.log('Teoria definida:', teoriaFinal);
       setTeoriaAtual(teoriaFinal);
       setMostrarSugestoes(false);
+      setInput('');
     } catch (erro) {
       console.error('Erro ao criar conversa:', erro);
       alert('Erro ao iniciar conversa');
