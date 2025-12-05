@@ -2,12 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import ConversaService from './services/ConversaService';
 import MensagemIA from './components/MensagemIA';
+import Sugestoes from './components/Sugestoes';
+import { teorias } from './utils/teorias';
 
 function App() {
   const [conversaId, setConversaId] = useState(null);
   const [mensagens, setMensagens] = useState([]);
   const [input, setInput] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const [teoriaAtual, setTeoriaAtual] = useState(null);
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -19,17 +23,37 @@ function App() {
     rolarParaFim();
   }, [mensagens]);
 
-  const iniciarConversa = async () => {
+  const iniciarConversa = async (teoria = null) => {
     try {
       setCarregando(true);
-      const conversa = await ConversaService.criarConversa();
+      const conversa = await ConversaService.criarConversa(teoria);
+      console.log('Conversa criada:', conversa);
       setConversaId(conversa.id);
       setMensagens([]);
+      const teoriaFinal = conversa.teoria || teoria;
+      console.log('Teoria definida:', teoriaFinal);
+      setTeoriaAtual(teoriaFinal);
+      setMostrarSugestoes(false);
     } catch (erro) {
       console.error('Erro ao criar conversa:', erro);
       alert('Erro ao iniciar conversa');
     } finally {
       setCarregando(false);
+    }
+  };
+
+  const selecionarTeoria = async (pergunta) => {
+    const teoriaObj = teorias.find(t => t.pergunta === pergunta);
+    if (teoriaObj) {
+      const teoriaTexto = `Convencer o usuário que ${teoriaObj.descricao.toLowerCase()}.`;
+      console.log('Teoria selecionada:', teoriaTexto);
+      await iniciarConversa(teoriaTexto);
+      setTimeout(() => {
+        setInput(pergunta);
+      }, 100);
+    } else {
+      setInput(pergunta);
+      setMostrarSugestoes(false);
     }
   };
 
@@ -113,19 +137,54 @@ function App() {
     setCarregando(true);
     setInput('');
 
-    wsRef.current.send(JSON.stringify({ conteudo: mensagemUsuario }));
+    const payload = { conteudo: mensagemUsuario };
+    if (teoriaAtual && teoriaAtual.trim()) {
+      payload.teoria = teoriaAtual.trim();
+    }
+    console.log('Enviando mensagem com teoria:', payload);
+    wsRef.current.send(JSON.stringify(payload));
   };
 
   if (!conversaId) {
     return (
       <div className="container-inicial">
-        <div className="caixa-inicial">
-          <h1>ChatterBox</h1>
-          <p>Inicie uma conversa com IA</p>
-          <button onClick={iniciarConversa} disabled={carregando} className="botao-primario">
-            {carregando ? 'Iniciando...' : 'Iniciar Conversa'}
-          </button>
-        </div>
+        {!mostrarSugestoes ? (
+          <div className="caixa-inicial">
+            <h1>ChatterBox</h1>
+            <p>Explore teorias bizarras e debata com IA</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+              <button 
+                onClick={() => setMostrarSugestoes(true)} 
+                className="botao-primario"
+                style={{ width: '100%' }}
+              >
+                Ver Teorias
+              </button>
+              <button 
+                onClick={() => iniciarConversa('Convencer o usuário que a terra é plana.')} 
+                disabled={carregando} 
+                className="botao-primario botao-secundario"
+                style={{ width: '100%' }}
+              >
+                {carregando ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                    <svg className="animate-spin" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeDasharray="43.98" strokeDashoffset="10" strokeLinecap="round"/>
+                    </svg>
+                    Iniciando...
+                  </span>
+                ) : (
+                  'Iniciar Conversa Livre'
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <Sugestoes 
+            onSelecionarTeoria={selecionarTeoria}
+            mostrar={mostrarSugestoes}
+          />
+        )}
       </div>
     );
   }
@@ -134,13 +193,28 @@ function App() {
     <div className="container-conversa">
       <div className="cabecalho">
         <h1>ChatterBox</h1>
-        <button onClick={iniciarConversa} className="botao-novo">Nova Conversa</button>
+        <button onClick={iniciarConversa} className="botao-novo">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+            <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          Nova Conversa
+        </button>
       </div>
 
       <div className="area-mensagens">
         {mensagens.length === 0 ? (
           <div className="mensagem-inicial">
-            <p>Comece a conversa...</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.5 }}>
+                <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <p>Comece a conversa...</p>
+              {teoriaAtual && (
+                <p style={{ fontSize: '0.875rem', color: 'hsl(var(--muted-foreground))', marginTop: '8px' }}>
+                  Teoria: {teoriaAtual}
+                </p>
+              )}
+            </div>
           </div>
         ) : (
           mensagens.map(msg => (
@@ -170,8 +244,22 @@ function App() {
           disabled={carregando}
           className="entrada-texto"
         />
-        <button type="submit" disabled={carregando} className="botao-enviar">
-          {carregando ? 'Enviando...' : 'Enviar'}
+        <button type="submit" disabled={carregando || !input.trim()} className="botao-enviar">
+          {carregando ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg className="animate-spin" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeDasharray="43.98" strokeDashoffset="10" strokeLinecap="round"/>
+              </svg>
+              Enviando...
+            </span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 8L14 2L10 8L14 14L2 8Z" fill="currentColor"/>
+              </svg>
+              Enviar
+            </span>
+          )}
         </button>
       </form>
     </div>
