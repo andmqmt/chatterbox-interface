@@ -4,7 +4,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const ConversaService = {
   criarConversa: async (teoria = null) => {
-    const resposta = await axios.post(`${API_BASE_URL}/conversas`, { teoria });
+    const teoriaFinal = (teoria && typeof teoria === 'string' && teoria.trim()) ? teoria.trim() : "";
+    const payload = { teoria: teoriaFinal };
+    console.log('[SERVICE] Criando conversa com payload:', payload);
+    const resposta = await axios.post(`${API_BASE_URL}/conversas`, payload);
     return resposta.data;
   },
 
