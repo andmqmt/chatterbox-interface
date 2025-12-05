@@ -33,18 +33,20 @@ function App() {
         wsRef.current = null;
       }
       
-      const conversa = await ConversaService.criarConversa(teoria);
+      const teoriaFinal = (teoria && typeof teoria === 'string') ? teoria : null;
+      console.log('[FRONTEND] Iniciando conversa com teoria:', teoriaFinal);
+      const conversa = await ConversaService.criarConversa(teoriaFinal);
       console.log('Conversa criada:', conversa);
       setConversaId(conversa.id);
       setMensagens([]);
-      const teoriaFinal = conversa.teoria || teoria;
-      console.log('Teoria definida:', teoriaFinal);
-      setTeoriaAtual(teoriaFinal);
+      const teoriaAtualizada = conversa.teoria || teoriaFinal || null;
+      console.log('Teoria definida:', teoriaAtualizada);
+      setTeoriaAtual(teoriaAtualizada);
       setMostrarSugestoes(false);
       setInput('');
     } catch (erro) {
       console.error('Erro ao criar conversa:', erro);
-      alert('Erro ao iniciar conversa');
+      alert('Erro ao iniciar conversa: ' + (erro.response?.data?.detail || erro.message || 'Erro desconhecido'));
     } finally {
       setCarregando(false);
     }
@@ -211,7 +213,7 @@ function App() {
                 Ver Teorias
               </button>
               <button 
-                onClick={() => iniciarConversa('Convencer o usuário que a terra é plana.')} 
+                onClick={() => iniciarConversa()} 
                 disabled={carregando} 
                 className="botao-primario botao-secundario"
                 style={{ width: '100%' }}
@@ -243,7 +245,14 @@ function App() {
     <div className="container-conversa">
       <div className="cabecalho">
         <h1>ChatterBox</h1>
-        <button onClick={() => iniciarConversa()} className="botao-novo">
+        <button 
+          onClick={(e) => {
+            e.preventDefault();
+            iniciarConversa();
+          }} 
+          className="botao-novo"
+          disabled={carregando}
+        >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
             <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
