@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import ConversaService from './services/ConversaService';
 import MensagemIA from './components/MensagemIA';
+import Sugestoes from './components/Sugestoes';
+import { teorias } from './utils/teorias';
 
 function App() {
   const [conversaId, setConversaId] = useState(null);
   const [mensagens, setMensagens] = useState([]);
   const [input, setInput] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [teoriaAtual, setTeoriaAtual] = useState(null);
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -23,13 +26,6 @@ function App() {
   const iniciarConversa = async (teoria = null) => {
     try {
       setCarregando(true);
-      
-      if (wsRef.current) {
-        console.log('[FRONTEND] Fechando WebSocket anterior...');
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      
       const conversa = await ConversaService.criarConversa(teoria);
       console.log('Conversa criada:', conversa);
       setConversaId(conversa.id);
@@ -37,7 +33,7 @@ function App() {
       const teoriaFinal = conversa.teoria || teoria;
       console.log('Teoria definida:', teoriaFinal);
       setTeoriaAtual(teoriaFinal);
-      setInput('');
+      setMostrarSugestoes(false);
     } catch (erro) {
       console.error('Erro ao criar conversa:', erro);
       alert('Erro ao iniciar conversa');
@@ -46,6 +42,20 @@ function App() {
     }
   };
 
+  const selecionarTeoria = async (pergunta) => {
+    const teoriaObj = teorias.find(t => t.pergunta === pergunta);
+    if (teoriaObj) {
+      const teoriaTexto = `Convencer o usuário que ${teoriaObj.descricao.toLowerCase()}.`;
+      console.log('Teoria selecionada:', teoriaTexto);
+      await iniciarConversa(teoriaTexto);
+      setTimeout(() => {
+        setInput(pergunta);
+      }, 100);
+    } else {
+      setInput(pergunta);
+      setMostrarSugestoes(false);
+    }
+  };
 
   const conectarWebsocket = (id) => {
     return new Promise((resolve, reject) => {
@@ -180,32 +190,43 @@ function App() {
   if (!conversaId) {
     return (
       <div className="container-inicial">
-        <div className="caixa-inicial">
-          <h1>ChatterBox</h1>
-          <p>Explore teorias bizarras e debata com IA</p>
-          <p style={{ fontSize: '0.875rem', color: 'hsl(var(--muted-foreground))', marginTop: '8px' }}>
-            Pergunte sobre qualquer teoria e a IA irá defendê-la!
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '24px' }}>
-            <button 
-              onClick={() => iniciarConversa()} 
-              disabled={carregando} 
-              className="botao-primario"
-              style={{ width: '100%' }}
-            >
-              {carregando ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                  <svg className="animate-spin" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeDasharray="43.98" strokeDashoffset="10" strokeLinecap="round"/>
-                  </svg>
-                  Iniciando...
-                </span>
-              ) : (
-                'Iniciar Conversa Livre'
-              )}
-            </button>
+        {!mostrarSugestoes ? (
+          <div className="caixa-inicial">
+            <h1>ChatterBox</h1>
+            <p>Explore teorias bizarras e debata com IA</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+              <button 
+                onClick={() => setMostrarSugestoes(true)} 
+                className="botao-primario"
+                style={{ width: '100%' }}
+              >
+                Ver Teorias
+              </button>
+              <button 
+                onClick={() => iniciarConversa('Convencer o usuário que a terra é plana.')} 
+                disabled={carregando} 
+                className="botao-primario botao-secundario"
+                style={{ width: '100%' }}
+              >
+                {carregando ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                    <svg className="animate-spin" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeDasharray="43.98" strokeDashoffset="10" strokeLinecap="round"/>
+                    </svg>
+                    Iniciando...
+                  </span>
+                ) : (
+                  'Iniciar Conversa Livre'
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <Sugestoes 
+            onSelecionarTeoria={selecionarTeoria}
+            mostrar={mostrarSugestoes}
+          />
+        )}
       </div>
     );
   }

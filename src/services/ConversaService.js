@@ -3,8 +3,8 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const ConversaService = {
-  criarConversa: async () => {
-    const resposta = await axios.post(`${API_BASE_URL}/conversas`);
+  criarConversa: async (teoria = null) => {
+    const resposta = await axios.post(`${API_BASE_URL}/conversas`, { teoria });
     return resposta.data;
   },
 
