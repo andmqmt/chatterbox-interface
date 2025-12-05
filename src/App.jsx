@@ -58,53 +58,79 @@ function App() {
   };
 
   const conectarWebsocket = (id) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const wsUrl = apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss');
-    const url = `${wsUrl}/ws/conversa/${id}`;
-    
-    wsRef.current = new WebSocket(url);
+    return new Promise((resolve, reject) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        console.log('[FRONTEND] WebSocket já está conectado');
+        resolve();
+        return;
+      }
 
-    wsRef.current.onopen = () => {
-      console.log('WebSocket conectado');
-    };
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const wsUrl = apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss');
+      const url = `${wsUrl}/ws/conversa/${id}`;
+      
+      console.log('[FRONTEND] Conectando WebSocket:', url);
+      wsRef.current = new WebSocket(url);
 
-    wsRef.current.onmessage = (evento) => {
-      try {
-        const dados = JSON.parse(evento.data);
+      wsRef.current.onopen = () => {
+        console.log('[FRONTEND] WebSocket conectado com sucesso');
+        resolve();
+      };
 
-        if (dados.tipo === 'resposta_ia') {
-          setMensagens(prev => {
-            const novasMensagens = [...prev];
-            const ultimaMensagem = novasMensagens[novasMensagens.length - 1];
-            if (ultimaMensagem?.remetente === 'ia') {
-              novasMensagens[novasMensagens.length - 1] = {
-                ...ultimaMensagem,
-                conteudo: ultimaMensagem.conteudo + dados.conteudo
-              };
-            }
-            return novasMensagens;
-          });
-        } else if (dados.tipo === 'fim_resposta') {
-          setCarregando(false);
-        } else if (dados.tipo === 'erro') {
-          alert('Erro: ' + dados.mensagem);
+      wsRef.current.onmessage = (evento) => {
+        try {
+          console.log('[FRONTEND] Mensagem recebida:', evento.data.substring(0, 100));
+          const dados = JSON.parse(evento.data);
+          console.log('[FRONTEND] Dados parseados:', dados.tipo);
+
+          if (dados.tipo === 'resposta_ia') {
+            setMensagens(prev => {
+              const novasMensagens = [...prev];
+              const ultimaMensagem = novasMensagens[novasMensagens.length - 1];
+              if (ultimaMensagem?.remetente === 'ia') {
+                novasMensagens[novasMensagens.length - 1] = {
+                  ...ultimaMensagem,
+                  conteudo: ultimaMensagem.conteudo + dados.conteudo
+                };
+              }
+              return novasMensagens;
+            });
+          } else if (dados.tipo === 'fim_resposta') {
+            console.log('[FRONTEND] Fim da resposta recebido');
+            setCarregando(false);
+          } else if (dados.tipo === 'erro') {
+            console.error('[FRONTEND] Erro recebido:', dados.mensagem);
+            alert('Erro: ' + dados.mensagem);
+            setCarregando(false);
+          }
+        } catch (erro) {
+          console.error('[FRONTEND] Erro ao processar mensagem:', erro, evento.data);
           setCarregando(false);
         }
-      } catch (erro) {
-        console.error('Erro ao processar mensagem:', erro);
+      };
+
+      wsRef.current.onerror = (erro) => {
+        console.error('[FRONTEND] Erro WebSocket:', erro);
+        console.error('[FRONTEND] Estado do WebSocket:', wsRef.current?.readyState);
+        reject(new Error('Erro na conexão WebSocket'));
         setCarregando(false);
-      }
-    };
+      };
 
-    wsRef.current.onerror = (erro) => {
-      console.error('Erro WebSocket:', erro);
-      alert('Erro na conexão WebSocket');
-      setCarregando(false);
-    };
+      wsRef.current.onclose = (evento) => {
+        console.log('[FRONTEND] WebSocket desconectado');
+        console.log('[FRONTEND] Código:', evento.code, 'Razão:', evento.reason, 'Foi limpo:', evento.wasClean);
+        if (evento.code !== 1000 && carregando) {
+          console.warn('[FRONTEND] Conexão fechada inesperadamente durante carregamento');
+          setCarregando(false);
+        }
+      };
 
-    wsRef.current.onclose = () => {
-      console.log('WebSocket desconectado');
-    };
+      setTimeout(() => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          reject(new Error('Timeout ao conectar WebSocket'));
+        }
+      }, 10000);
+    });
   };
 
   const enviarMensagem = async (e) => {
@@ -114,35 +140,51 @@ function App() {
 
     const mensagemUsuario = input.trim();
 
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      conectarWebsocket(conversaId);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    setMensagens(prev => [...prev, 
-      {
-        id: Date.now().toString(),
-        conteudo: mensagemUsuario,
-        remetente: 'usuario',
-        timestamp: new Date().toISOString()
-      },
-      {
-        id: (Date.now() + 1).toString(),
-        conteudo: '',
-        remetente: 'ia',
-        timestamp: new Date().toISOString()
+    try {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        console.log('[FRONTEND] WebSocket não está aberto, reconectando...');
+        await conectarWebsocket(conversaId);
+        console.log('[FRONTEND] WebSocket conectado, pronto para enviar');
       }
-    ]);
 
-    setCarregando(true);
-    setInput('');
+      if (wsRef.current.readyState !== WebSocket.OPEN) {
+        console.error('[FRONTEND] WebSocket ainda não está aberto após tentativa de conexão');
+        alert('Erro ao conectar. Tente novamente.');
+        return;
+      }
 
-    const payload = { conteudo: mensagemUsuario };
-    if (teoriaAtual && teoriaAtual.trim()) {
-      payload.teoria = teoriaAtual.trim();
+      setMensagens(prev => [...prev, 
+        {
+          id: Date.now().toString(),
+          conteudo: mensagemUsuario,
+          remetente: 'usuario',
+          timestamp: new Date().toISOString()
+        },
+        {
+          id: (Date.now() + 1).toString(),
+          conteudo: '',
+          remetente: 'ia',
+          timestamp: new Date().toISOString()
+        }
+      ]);
+
+      setCarregando(true);
+      setInput('');
+
+      const payload = { conteudo: mensagemUsuario };
+      if (teoriaAtual && teoriaAtual.trim()) {
+        payload.teoria = teoriaAtual.trim();
+      }
+      console.log('[FRONTEND] Enviando mensagem com payload:', payload);
+      console.log('[FRONTEND] Estado do WebSocket antes de enviar:', wsRef.current.readyState);
+      
+      wsRef.current.send(JSON.stringify(payload));
+      console.log('[FRONTEND] Mensagem enviada com sucesso');
+    } catch (erro) {
+      console.error('[FRONTEND] Erro ao enviar mensagem:', erro);
+      alert('Erro ao enviar mensagem: ' + erro.message);
+      setCarregando(false);
     }
-    console.log('Enviando mensagem com teoria:', payload);
-    wsRef.current.send(JSON.stringify(payload));
   };
 
   if (!conversaId) {
